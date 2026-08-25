@@ -1,7 +1,7 @@
 """
 OTE - Observation Trust Engine
 Member 2: Spatial & Cross-Station Analytics
-Module: SpatialAnalyzer (Phase 7)
+Module: SpatialAnalyzer (Phase 7 & 8)
 Authoritative Source: OTE_Member2_Implementation_Bible.pdf (Phase 7 & Section 9.2)
 """
 
@@ -14,6 +14,7 @@ from spatial.neighbors import NeighborCandidate, find_k_nearest_neighbors
 from spatial.idw import compute_idw_consensus
 from spatial.residual import compute_spatial_residual, classify_spatial_status
 from spatial.contamination import filter_valid_neighbors, ExclusionReason
+from spatial.explanation import build_explanation
 
 SUPPORTED_VARIABLES: Tuple[str, ...] = ("temperature", "humidity", "pressure")
 
@@ -22,7 +23,7 @@ class SpatialAnalyzer:
     """
     Unified multi-variable spatial analysis engine.
     Orchestrates neighbor discovery, contamination filtering, IDW consensus,
-    residual standardization, Section 9.2 evidence assembly, and fleet-level rollup.
+    residual standardization, Section 9.2 evidence assembly, and explanation generation.
     """
 
     def __init__(
@@ -196,11 +197,11 @@ class SpatialAnalyzer:
     ) -> Dict[str, Any]:
         """
         Execute multi-variable spatial analysis for target station.
-        Produces Section 9.2 compliant contract dictionary.
+        Produces Section 9.2 compliant contract dictionary with explanation text.
         """
         target_station = self.registry.get_station(target_id)
         if target_station is None:
-            return {
+            skeleton: Dict[str, Any] = {
                 "station_id": target_id,
                 "variables": {
                     var: {
@@ -219,8 +220,10 @@ class SpatialAnalyzer:
                 "evidence_strength": "NONE",
                 "included_neighbors": [],
                 "excluded_neighbors": [],
-                "explanation": "Target station not found in registry.",
+                "explanation": "",
             }
+            skeleton["explanation"] = build_explanation(skeleton)
+            return skeleton
 
         target_snapshot = station_snapshots.get(target_id)
 
@@ -255,20 +258,17 @@ class SpatialAnalyzer:
         # Fleet-level rollup
         fleet_status, evidence_strength = self._rollup_fleet_status_and_strength(variables_evidence)
 
-        # Contract explanation string placeholder (Full explanation generation belongs to Phase 8)
-        if fleet_status == "DISAGREEMENT":
-            explanation = "Target observation is not corroborated by nearby stations."
-        elif fleet_status == "AGREEMENT":
-            explanation = "Target observation is corroborated by nearby stations."
-        else:
-            explanation = "Insufficient spatial evidence available from nearby stations."
-
-        return {
+        evidence_contract: Dict[str, Any] = {
             "station_id": target_id,
             "variables": variables_evidence,
             "spatial_status": fleet_status,
             "evidence_strength": evidence_strength,
             "included_neighbors": sorted(list(all_included)),
             "excluded_neighbors": sorted(list(all_excluded)),
-            "explanation": explanation,
+            "explanation": "",
         }
+
+        # Deterministic explanation generation from evidence fields
+        evidence_contract["explanation"] = build_explanation(evidence_contract)
+
+        return evidence_contract
